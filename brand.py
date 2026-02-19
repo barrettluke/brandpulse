@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 # Theme Presets
 THEMES = {
@@ -35,7 +35,7 @@ SYSTEM_FONTS = [
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
-    if len(h) == 3: h = ''.join([c*2 for c in h])
+    if len(h) == 3: h = ''.join([c*2 for c in c])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 def download_font(font_name):
@@ -138,7 +138,7 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
                   primary=None, secondary=None, pattern=None, align="center", 
                   font_choice="orbitron", no_text=False, gradient=False,
                   alpha_pattern=30, alpha_scanlines=15, alpha_glow=25, 
-                  vignette=False, border_width=0):
+                  vignette=False, border_width=0, glow_mode="center"):
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -167,13 +167,20 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
     
-    s_alpha = int(255 * (alpha_scanlines/100))
-    for y in range(0, height, 4 * scale):
-        draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
+    if glow_mode != "none":
+        g_alpha = int(255 * (alpha_glow/100))
+        g_alpha_s = int(g_alpha * 0.8)
         
-    g_alpha = int(255 * (alpha_glow/100))
-    draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha)) 
-    draw.ellipse([width//4-200*scale, height//4-200*scale, width//4+200*scale, height//4+200*scale], fill=(s_color[0], s_color[1], s_color[2], int(g_alpha*0.8))) 
+        if glow_mode == "center":
+            draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha)) 
+            draw.ellipse([width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s)) 
+        elif glow_mode == "sides":
+            draw.ellipse([-200*scale, -200*scale, 400*scale, 600*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha))
+            draw.ellipse([width-400*scale, -200*scale, width+200*scale, 600*scale], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s))
+        elif glow_mode == "corners":
+            sz = 300*scale
+            draw.ellipse([-sz, -sz, sz, sz], fill=(p_color[0], p_color[1], p_color[2], g_alpha))
+            draw.ellipse([width-sz, height-sz, width+sz, height+sz], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s))
 
     if not no_text:
         font_path = download_font(font_choice)
@@ -191,6 +198,10 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
         draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
         draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
         draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
+
+    s_alpha = int(255 * (alpha_scanlines/100))
+    for y in range(0, height, 4 * scale):
+        draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
     
     if border_width > 0:
         b_px = border_width * scale
@@ -224,6 +235,7 @@ def main():
     parser.add_argument("--gradient", action="store_true", help="Enable gradient")
     parser.add_argument("--vignette", action="store_true", help="Enable vignette")
     parser.add_argument("--border", type=int, default=0, help="Border width")
+    parser.add_argument("--glow", default="center", choices=["center", "sides", "corners", "none"], help="Brand glow style")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
@@ -231,11 +243,11 @@ def main():
     args = parser.parse_args()
     
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // HD Patterns...")
+    print(f"🎨 BrandPulse v{VERSION} // Glow: {args.glow}...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
-                  args.vignette, args.border)
+                  args.vignette, args.border, args.glow)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
