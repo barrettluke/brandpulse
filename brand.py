@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Theme Presets
 THEMES = {
@@ -35,6 +35,7 @@ SYSTEM_FONTS = [
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
+    if len(h) == 3: h = ''.join([c*2 for c in h])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 def download_font(font_name):
@@ -42,7 +43,6 @@ def download_font(font_name):
     if not url: return None
     target_path = os.path.join(tempfile.gettempdir(), f"bp_v4_{font_name}.ttf")
     if not os.path.exists(target_path):
-        print(f"📥 Downloading font: {font_name}...")
         try:
             user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             opener = urllib.request.build_opener()
@@ -64,6 +64,19 @@ def create_gradient(width, height, color1, color2):
     mask.putdata(mask_data)
     base.paste(top, (0, 0), mask)
     return base
+
+def draw_vignette(img, intensity=0.5):
+    width, height = img.size
+    overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    
+    for i in range(100):
+        alpha = int(255 * intensity * (i / 100)**2)
+        # Draw concentric rounded rectangles to create vignette effect
+        inset = i * 2
+        draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=2)
+    
+    return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
 def draw_pattern(draw, pattern, width, height, color, alpha, scale):
     p_color = (color[0], color[1], color[2], int(255 * (alpha/100)))
@@ -100,8 +113,8 @@ def draw_pattern(draw, pattern, width, height, color, alpha, scale):
 def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk", 
                   primary=None, secondary=None, pattern=None, align="center", 
                   font_choice="orbitron", no_text=False, gradient=False,
-                  alpha_pattern=30, alpha_scanlines=15, alpha_glow=25):
-    # USE SCALE 4 FOR MASSIVE SOURCE RESOLUTION
+                  alpha_pattern=30, alpha_scanlines=15, alpha_glow=25, 
+                  vignette=False, border_width=0):
     scale = 4
     width, height = 1280 * scale, 400 * scale
     
@@ -112,7 +125,7 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     s_color = hex_to_rgb(secondary) if secondary else theme_s
     active_pattern = pattern if pattern else theme_pattern
 
-    # 1. Background
+    # 1. Background (Solid vs Gradient vs Image)
     if bg_path and os.path.exists(bg_path):
         bg_img = Image.open(bg_path).convert('RGB')
         img = ImageOps.fit(bg_img, (width, height), centering=(0.5, 0.5))
@@ -126,24 +139,26 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     else:
         img = Image.new('RGB', (width, height), color=theme_bg)
     
+    # 2. Effects
+    if vignette:
+        img = draw_vignette(img)
+        
     layer = Image.new('RGBA', (width, height), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
     
-    # 2. Pattern (Behind the glow)
+    # 3. Pattern
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
     
-    # 3. Brand Glow (Big and blurry)
-    glow_p = (p_color[0], p_color[1], p_color[2], int(255 * (alpha_glow/100)))
-    glow_s = (s_color[0], s_color[1], s_color[2], int(255 * (alpha_glow/100 * 0.8)))
-    draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=glow_p) 
-    draw.ellipse([width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], fill=glow_s) 
+    # 4. Brand Glow
+    g_alpha = int(255 * (alpha_glow/100))
+    draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha)) 
+    draw.ellipse([width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], fill=(s_color[0], s_color[1], s_color[2], int(g_alpha*0.8))) 
 
-    # 4. Text Handling
+    # 5. Text
     if not no_text:
         font_path = download_font(font_choice)
         if font_path:
-            # GIANT FONT FOR SCALE 4
             size = 120 * scale if len(name) < 12 else 90 * scale
             font = ImageFont.truetype(font_path, size)
         else:
@@ -155,20 +170,24 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
         tx = padding if align == "left" else (width - tw - padding if align == "right" else (width - tw) // 2)
         ty = (height - th) // 2
         
-        # Chromatic Aberration Offset
         offset = 3 * scale
         draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
         draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
         draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
     
-    # 5. Scanlines (Added AFTER text for texture)
+    # 6. Scanlines
     s_alpha = int(255 * (alpha_scanlines/100))
     for y in range(0, height, 4 * scale):
         draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
 
+    # 7. Border
+    if border_width > 0:
+        b_px = border_width * scale
+        draw.rectangle([0, 0, width, height], outline=(p_color[0], p_color[1], p_color[2], 200), width=b_px)
+
     img.paste(layer, (0,0), layer)
     
-    # 6. Footer (Inter)
+    # 8. Footer
     footer_font_path = download_font("inter")
     if footer_font_path:
         small_font = ImageFont.truetype(footer_font_path, 22 * scale)
@@ -178,23 +197,24 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
         footer_y = height - 60 * scale
         draw.text(((width - s_tw)//2, footer_y), sub_text, font=small_font, fill=(139, 148, 158, 200))
 
-    # FINAL HIGH QUALITY DOWNSCALE
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
-    img.save(output_path, quality=100) # Max quality
+    img.save(output_path, quality=100)
     return output_path
 
 def main():
     parser = argparse.ArgumentParser(description=f"BrandPulse v{VERSION}")
     parser.add_argument("name", help="Project name")
     parser.add_argument("-o", "--output", help="Output file")
-    parser.add_argument("-f", "--font", default="orbitron", choices=FONT_URLS.keys(), help="Font")
-    parser.add_argument("-t", "--theme", default="cyberpunk", choices=THEMES.keys(), help="Theme")
-    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "none"], help="Pattern")
+    parser.add_argument("-f", "--font", default="orbitron", help="Font choice")
+    parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme preset")
+    parser.add_argument("-p", "--pattern", help="Background pattern")
     parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
     parser.add_argument("-b", "--bg", help="Background path")
-    parser.add_argument("--primary", help="Primary hex")
-    parser.add_argument("--secondary", help="Secondary hex")
+    parser.add_argument("--primary", help="Primary hex color")
+    parser.add_argument("--secondary", help="Secondary hex color")
     parser.add_argument("--gradient", action="store_true", help="Enable gradient")
+    parser.add_argument("--vignette", action="store_true", help="Enable dark vignette edges")
+    parser.add_argument("--border", type=int, default=0, help="Outer border width in pixels")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
@@ -203,10 +223,11 @@ def main():
     args = parser.parse_args()
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
     
-    print(f"🎨 BrandPulse v{VERSION} // 4X Super-sampling Render...")
+    print(f"🎨 BrandPulse v{VERSION} // HD Rendering with Effects...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
-                  args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow)
+                  args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
+                  args.vignette, args.border)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
