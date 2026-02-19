@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 # Theme Presets
 THEMES = {
@@ -35,7 +35,7 @@ SYSTEM_FONTS = [
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
-    if len(h) == 3: h = ''.join([c*2 for c in c])
+    if len(h) == 3: h = ''.join([c*2 for c in h])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 def download_font(font_name):
@@ -134,11 +134,34 @@ def draw_pattern(draw, pattern, width, height, color, alpha, scale):
             s_size = random.randint(1, 3) * scale
             draw.ellipse([x, y, x+s_size, y+s_size], fill=p_color)
 
+def draw_abstract_shapes(draw, width, height, p_color, s_color, alpha, scale):
+    a = int(255 * (alpha/100))
+    p_a = (p_color[0], p_color[1], p_color[2], a)
+    s_a = (s_color[0], s_color[1], s_color[2], a)
+    
+    # Draw 3-5 randomized large polygons
+    for _ in range(random.randint(3, 6)):
+        points = []
+        center_x = random.randint(0, width)
+        center_y = random.randint(0, height)
+        radius = random.randint(100, 400) * scale
+        sides = random.randint(3, 5)
+        
+        for i in range(sides):
+            angle = math.radians(i * (360 / sides) + random.randint(0, 30))
+            px = center_x + radius * math.cos(angle)
+            py = center_y + radius * math.sin(angle)
+            points.append((px, py))
+            
+        color = random.choice([p_a, s_a])
+        # Draw semi-transparent filled polygon
+        draw.polygon(points, fill=(color[0], color[1], color[2], a // 3), outline=color, width=1*scale)
+
 def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk", 
                   primary=None, secondary=None, pattern=None, align="center", 
                   font_choice="orbitron", no_text=False, gradient=False,
                   alpha_pattern=30, alpha_scanlines=15, alpha_glow=25, 
-                  vignette=False, border_width=0, glow_mode="center"):
+                  vignette=False, border_width=0, glow_mode="center", abstract_shapes=False):
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -167,6 +190,9 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
     
+    if abstract_shapes:
+        draw_abstract_shapes(draw, width, height, p_color, s_color, alpha_glow, scale)
+
     if glow_mode != "none":
         g_alpha = int(255 * (alpha_glow/100))
         g_alpha_s = int(g_alpha * 0.8)
@@ -236,6 +262,7 @@ def main():
     parser.add_argument("--vignette", action="store_true", help="Enable vignette")
     parser.add_argument("--border", type=int, default=0, help="Border width")
     parser.add_argument("--glow", default="center", choices=["center", "sides", "corners", "none"], help="Brand glow style")
+    parser.add_argument("--shapes", action="store_true", help="Add randomized geometric abstract shapes")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
@@ -251,26 +278,19 @@ def main():
         args.font = random.choice(list(FONT_URLS.keys()))
         args.align = random.choice(["left", "center", "right"])
         args.glow = random.choice(["center", "sides", "corners", "none"])
+        args.shapes = random.choice([True, False])
         args.gradient = random.choice([True, False])
         args.vignette = random.choice([True, False])
         args.alpha_pattern = random.randint(10, 80)
         args.alpha_scanlines = random.randint(5, 40)
         args.alpha_glow = random.randint(10, 90)
-        
-        # Display the chosen random config
-        print(f"   Theme: {args.theme}")
-        print(f"   Pattern: {args.pattern}")
-        print(f"   Font: {args.font}")
-        print(f"   Align: {args.align}")
-        print(f"   Glow: {args.glow}")
-        print(f"   Gradient: {args.gradient}")
 
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // HD Processing...")
+    print(f"🎨 BrandPulse v{VERSION} // Processing...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
-                  args.vignette, args.border, args.glow)
+                  args.vignette, args.border, args.glow, args.shapes)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
