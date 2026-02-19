@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 # Theme Presets
 THEMES = {
@@ -35,7 +35,7 @@ SYSTEM_FONTS = [
 
 def hex_to_rgb(h):
     h = h.lstrip('#')
-    if len(h) == 3: h = ''.join([c*2 for c in h])
+    if len(h) == 3: h = ''.join([c*2 for c in c])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
 def download_font(font_name):
@@ -76,20 +76,17 @@ def draw_vignette(img, intensity=0.5):
 
 def draw_pattern(draw, pattern, width, height, color, alpha, scale):
     p_color = (color[0], color[1], color[2], int(255 * (alpha/100)))
-    
     if pattern == "grid":
         spacing = 60 * scale
         for x in range(0, width, spacing):
             draw.line([(x, 0), (x, height)], fill=p_color, width=1*scale)
         for y in range(0, height, spacing):
             draw.line([(0, y), (width, y)], fill=p_color, width=1*scale)
-            
     elif pattern == "dots":
         spacing = 40 * scale
         for x in range(0, width, spacing):
             for y in range(0, height, spacing):
                 draw.ellipse([x-2*scale, y-2*scale, x+2*scale, y+2*scale], fill=p_color)
-                
     elif pattern == "hex":
         size = 40 * scale
         h = size * math.sqrt(3)
@@ -102,66 +99,48 @@ def draw_pattern(draw, pattern, width, height, color, alpha, scale):
                     angle = math.radians(i * 60)
                     points.append((x + size * math.cos(angle), py + size * math.sin(angle)))
                 draw.polygon(points, outline=p_color, width=2*scale)
-                
     elif pattern == "rays":
         for i in range(0, 360, 15):
             angle = math.radians(i)
             end_x = width // 2 + 3000 * math.cos(angle)
             end_y = height // 2 + 3000 * math.sin(angle)
             draw.line([(width//2, height//2), (end_x, end_y)], fill=p_color, width=3*scale)
-
     elif pattern == "waves":
-        amplitude = 20 * scale
-        wavelength = 150 * scale
+        amplitude, wavelength = 20 * scale, 150 * scale
         for y in range(0, height + 100, 40 * scale):
-            points = []
-            for x in range(0, width + 10, 10):
-                py = y + amplitude * math.sin((x / wavelength) * 2 * math.pi)
-                points.append((x, py))
+            points = [(x, y + amplitude * math.sin((x / wavelength) * 2 * math.pi)) for x in range(0, width + 10, 10)]
             draw.line(points, fill=p_color, width=2*scale)
-
     elif pattern == "circuit":
         for _ in range(30):
             x, y = random.randint(0, width), random.randint(0, height)
-            length = random.randint(100, 400) * scale
-            direction = random.choice([(1,0), (0,1), (1,1), (-1,1)])
-            draw.line([(x, y), (x + direction[0]*length, y + direction[1]*length)], fill=p_color, width=2*scale)
+            length, dir = random.randint(100, 400) * scale, random.choice([(1,0), (0,1), (1,1), (-1,1)])
+            draw.line([(x, y), (x + dir[0]*length, y + dir[1]*length)], fill=p_color, width=2*scale)
             draw.ellipse([x-4*scale, y-4*scale, x+4*scale, y+4*scale], fill=p_color)
-
     elif pattern == "stars":
         for _ in range(200):
             x, y = random.randint(0, width), random.randint(0, height)
             s_size = random.randint(1, 3) * scale
             draw.ellipse([x, y, x+s_size, y+s_size], fill=p_color)
 
-def draw_abstract_shapes(draw, width, height, p_color, s_color, alpha, scale):
-    a = int(255 * (alpha/100))
-    p_a = (p_color[0], p_color[1], p_color[2], a)
-    s_a = (s_color[0], s_color[1], s_color[2], a)
-    
-    # Draw 3-5 randomized large polygons
-    for _ in range(random.randint(3, 6)):
-        points = []
-        center_x = random.randint(0, width)
-        center_y = random.randint(0, height)
-        radius = random.randint(100, 400) * scale
-        sides = random.randint(3, 5)
-        
-        for i in range(sides):
-            angle = math.radians(i * (360 / sides) + random.randint(0, 30))
-            px = center_x + radius * math.cos(angle)
-            py = center_y + radius * math.sin(angle)
-            points.append((px, py))
-            
-        color = random.choice([p_a, s_a])
-        # Draw semi-transparent filled polygon
-        draw.polygon(points, fill=(color[0], color[1], color[2], a // 3), outline=color, width=1*scale)
+def draw_shape(draw, shape_type, coords, color):
+    if shape_type == "circle":
+        draw.ellipse(coords, fill=color)
+    elif shape_type == "rect":
+        draw.rectangle(coords, fill=color)
+    elif shape_type == "diamond":
+        x1, y1, x2, y2 = coords
+        cx, cy = (x1+x2)/2, (y1+y2)/2
+        w, h = (x2-x1)/2, (y2-y1)/2
+        draw.polygon([(cx, y1), (x2, cy), (cx, y2), (x1, cy)], fill=color)
+    elif shape_type == "triangle":
+        x1, y1, x2, y2 = coords
+        draw.polygon([(x1, y2), ((x1+x2)/2, y1), (x2, y2)], fill=color)
 
 def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk", 
                   primary=None, secondary=None, pattern=None, align="center", 
                   font_choice="orbitron", no_text=False, gradient=False,
                   alpha_pattern=30, alpha_scanlines=15, alpha_glow=25, 
-                  vignette=False, border_width=0, glow_mode="center", abstract_shapes=False):
+                  vignette=False, border_width=0, glow_mode="center", glow_shape="circle"):
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -190,29 +169,28 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
     
-    if abstract_shapes:
-        draw_abstract_shapes(draw, width, height, p_color, s_color, alpha_glow, scale)
-
+    # NEW DYNAMIC GLOW SHAPES
     if glow_mode != "none":
         g_alpha = int(255 * (alpha_glow/100))
-        g_alpha_s = int(g_alpha * 0.8)
+        g_alpha_s = int(g_alpha * 0.7)
+        color_p = (p_color[0], p_color[1], p_color[2], g_alpha)
+        color_s = (s_color[0], s_color[1], s_color[2], g_alpha_s)
         
         if glow_mode == "center":
-            draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha)) 
-            draw.ellipse([width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s)) 
+            draw_shape(draw, glow_shape, [width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], color_p)
+            draw_shape(draw, glow_shape, [width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], color_s)
         elif glow_mode == "sides":
-            draw.ellipse([-200*scale, -200*scale, 400*scale, 600*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha))
-            draw.ellipse([width-400*scale, -200*scale, width+200*scale, 600*scale], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s))
+            draw_shape(draw, glow_shape, [-200*scale, -200*scale, 400*scale, 600*scale], color_p)
+            draw_shape(draw, glow_shape, [width-400*scale, -200*scale, width+200*scale, 600*scale], color_s)
         elif glow_mode == "corners":
-            sz = 300*scale
-            draw.ellipse([-sz, -sz, sz, sz], fill=(p_color[0], p_color[1], p_color[2], g_alpha))
-            draw.ellipse([width-sz, height-sz, width+sz, height+sz], fill=(s_color[0], s_color[1], s_color[2], g_alpha_s))
+            sz = 350*scale
+            draw_shape(draw, glow_shape, [-sz, -sz, sz, sz], color_p)
+            draw_shape(draw, glow_shape, [width-sz, height-sz, width+sz, height+sz], color_s)
 
     if not no_text:
         font_path = download_font(font_choice)
         if font_path:
-            size = 120 * scale if len(name) < 12 else 90 * scale
-            font = ImageFont.truetype(font_path, size)
+            font = ImageFont.truetype(font_path, (120 * scale if len(name) < 12 else 90 * scale))
         else:
             font = ImageFont.load_default()
         bbox = font.getbbox(name)
@@ -234,6 +212,7 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
         draw.rectangle([0, 0, width, height], outline=(p_color[0], p_color[1], p_color[2], 200), width=b_px)
 
     img.paste(layer, (0,0), layer)
+    
     footer_font_path = download_font("inter")
     if footer_font_path:
         small_font = ImageFont.truetype(footer_font_path, 22 * scale)
@@ -262,12 +241,12 @@ def main():
     parser.add_argument("--vignette", action="store_true", help="Enable vignette")
     parser.add_argument("--border", type=int, default=0, help="Border width")
     parser.add_argument("--glow", default="center", choices=["center", "sides", "corners", "none"], help="Brand glow style")
-    parser.add_argument("--shapes", action="store_true", help="Add randomized geometric abstract shapes")
+    parser.add_argument("--glow-shape", default="circle", choices=["circle", "rect", "diamond", "triangle"], help="Shape for the glow")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
     parser.add_argument("--no-text", action="store_true", help="Skip text")
-    parser.add_argument("-r", "--random", action="store_true", help="Randomize all style settings")
+    parser.add_argument("-r", "--random", action="store_true", help="Randomize styles")
     
     args = parser.parse_args()
     
@@ -278,7 +257,7 @@ def main():
         args.font = random.choice(list(FONT_URLS.keys()))
         args.align = random.choice(["left", "center", "right"])
         args.glow = random.choice(["center", "sides", "corners", "none"])
-        args.shapes = random.choice([True, False])
+        args.glow_shape = random.choice(["circle", "rect", "diamond", "triangle"])
         args.gradient = random.choice([True, False])
         args.vignette = random.choice([True, False])
         args.alpha_pattern = random.randint(10, 80)
@@ -290,7 +269,7 @@ def main():
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
-                  args.vignette, args.border, args.glow, args.shapes)
+                  args.vignette, args.border, args.glow, args.glow_shape)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
