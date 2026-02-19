@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 # Theme Presets
 THEMES = {
@@ -240,10 +240,33 @@ def main():
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
     parser.add_argument("--no-text", action="store_true", help="Skip text")
+    parser.add_argument("-r", "--random", action="store_true", help="Randomize all style settings")
+    
     args = parser.parse_args()
     
+    if args.random:
+        print("🎲 Randomizing styles...")
+        args.theme = random.choice(list(THEMES.keys()))
+        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "none"])
+        args.font = random.choice(list(FONT_URLS.keys()))
+        args.align = random.choice(["left", "center", "right"])
+        args.glow = random.choice(["center", "sides", "corners", "none"])
+        args.gradient = random.choice([True, False])
+        args.vignette = random.choice([True, False])
+        args.alpha_pattern = random.randint(10, 80)
+        args.alpha_scanlines = random.randint(5, 40)
+        args.alpha_glow = random.randint(10, 90)
+        
+        # Display the chosen random config
+        print(f"   Theme: {args.theme}")
+        print(f"   Pattern: {args.pattern}")
+        print(f"   Font: {args.font}")
+        print(f"   Align: {args.align}")
+        print(f"   Glow: {args.glow}")
+        print(f"   Gradient: {args.gradient}")
+
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Glow: {args.glow}...")
+    print(f"🎨 BrandPulse v{VERSION} // HD Processing...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
