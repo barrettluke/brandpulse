@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 
 # Theme Presets
 THEMES = {
@@ -142,7 +142,7 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
                   font_choice="orbitron", no_text=False, gradient=False,
                   alpha_pattern=30, alpha_scanlines=15, alpha_glow=25, 
                   vignette=False, border_width=0, glow_mode="center", 
-                  glow_shape="circle", shape_count=2):
+                  glow_shape="circle", shape_count=2, no_scanlines=False):
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -183,7 +183,6 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
             cur_color = colors[i % 2]
             
             if glow_mode == "center":
-                # Distributed center shapes
                 s_scale = 1.0 - (i * 0.2)
                 sz_w, sz_h = 600 * s_scale * scale, 400 * s_scale * scale
                 draw_shape(draw, cur_shape, [width//2-sz_w, height//2-sz_h, width//2+sz_w, height//2+sz_h], cur_color)
@@ -195,9 +194,7 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
                 coords = [-sz, -sz, sz, sz] if i % 2 == 0 else [width-sz, height-sz, width+sz, height+sz]
                 draw_shape(draw, cur_shape, coords, cur_color)
             elif glow_mode == "scatter":
-                # Completely randomized scatter mode
-                sx = random.randint(0, width)
-                sy = random.randint(0, height)
+                sx, sy = random.randint(0, width), random.randint(0, height)
                 sr = random.randint(100, 400) * scale
                 draw_shape(draw, cur_shape, [sx-sr, sy-sr, sx+sr, sy+sr], cur_color)
 
@@ -217,10 +214,15 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
         draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
         draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
 
-    s_alpha = int(255 * (alpha_scanlines/100))
-    for y in range(0, height, 4 * scale):
-        draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
+    if not no_scanlines:
+        s_alpha = int(255 * (alpha_scanlines/100))
+        for y in range(0, height, 4 * scale):
+            draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
     
+    if border_width > 0:
+        b_px = border_width * scale
+        draw.rectangle([0, 0, width, height], outline=(p_color[0], p_color[1], p_color[2], 200), width=b_px)
+
     img.paste(layer, (0,0), layer)
     footer_font_path = download_font("inter")
     if footer_font_path:
@@ -251,7 +253,8 @@ def main():
     parser.add_argument("--border", type=int, default=0, help="Border width")
     parser.add_argument("--glow", default="center", choices=["center", "sides", "corners", "scatter", "none"], help="Glow style")
     parser.add_argument("--glow-shape", default="circle", choices=["circle", "rect", "diamond", "triangle", "mixed"], help="Glow shape")
-    parser.add_argument("--shape-count", type=int, default=2, help="Number of background shapes")
+    parser.add_argument("--shape-count", type=int, default=2, help="Number of shapes")
+    parser.add_argument("--no-scanlines", action="store_true", help="Remove horizontal retro lines")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
@@ -261,14 +264,14 @@ def main():
     args = parser.parse_args()
     
     if args.random:
-        print("🎲 Randomizing styles...")
         args.theme = random.choice(list(THEMES.keys()))
         args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "none"])
         args.font = random.choice(list(FONT_URLS.keys()))
         args.align = random.choice(["left", "center", "right"])
         args.glow = random.choice(["center", "sides", "corners", "scatter", "none"])
         args.glow_shape = random.choice(["circle", "rect", "diamond", "triangle", "mixed"])
-        args.shape_count = random.randint(2, 6)
+        args.shape_count = random.randint(2, 8)
+        args.no_scanlines = random.choice([True, False])
         args.gradient = random.choice([True, False])
         args.vignette = random.choice([True, False])
         args.alpha_pattern = random.randint(10, 80)
@@ -276,11 +279,11 @@ def main():
         args.alpha_glow = random.randint(10, 90)
 
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Processing...")
+    print(f"🎨 BrandPulse v{VERSION} // HD Processing...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
-                  args.vignette, args.border, args.glow, args.glow_shape, args.shape_count)
+                  args.vignette, args.border, args.glow, args.glow_shape, args.shape_count, args.no_scanlines)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
