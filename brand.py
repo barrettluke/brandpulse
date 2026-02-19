@@ -8,7 +8,7 @@ import random
 import urllib.request
 import tempfile
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # Theme Presets
 THEMES = {
@@ -16,7 +16,7 @@ THEMES = {
     "matrix": ((0, 5, 0), (0, 255, 65), (0, 143, 17), "dots"),
     "sunset": ((45, 10, 50), (255, 82, 82), (255, 193, 7), "rays"),
     "forest": ((10, 30, 10), (164, 255, 150), (34, 139, 34), "hex"),
-    "ocean": ((5, 20, 40), (0, 191, 255), (30, 144, 255), "grid"),
+    "ocean": ((5, 20, 40), (0, 191, 255), (30, 144, 255), "waves"),
     "mono": ((10, 10, 10), (240, 240, 240), (100, 100, 100), "dots")
 }
 
@@ -44,9 +44,8 @@ def download_font(font_name):
     target_path = os.path.join(tempfile.gettempdir(), f"bp_v4_{font_name}.ttf")
     if not os.path.exists(target_path):
         try:
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', user_agent)]
+            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
             urllib.request.install_opener(opener)
             urllib.request.urlretrieve(url, target_path)
         except:
@@ -69,28 +68,28 @@ def draw_vignette(img, intensity=0.5):
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    
     for i in range(100):
         alpha = int(255 * intensity * (i / 100)**2)
-        # Draw concentric rounded rectangles to create vignette effect
         inset = i * 2
         draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=2)
-    
     return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
 def draw_pattern(draw, pattern, width, height, color, alpha, scale):
     p_color = (color[0], color[1], color[2], int(255 * (alpha/100)))
+    
     if pattern == "grid":
         spacing = 60 * scale
         for x in range(0, width, spacing):
-            draw.line([(x, 0), (x, height)], fill=p_color, width=2*scale)
+            draw.line([(x, 0), (x, height)], fill=p_color, width=1*scale)
         for y in range(0, height, spacing):
-            draw.line([(0, y), (width, y)], fill=p_color, width=2*scale)
+            draw.line([(0, y), (width, y)], fill=p_color, width=1*scale)
+            
     elif pattern == "dots":
         spacing = 40 * scale
         for x in range(0, width, spacing):
             for y in range(0, height, spacing):
                 draw.ellipse([x-2*scale, y-2*scale, x+2*scale, y+2*scale], fill=p_color)
+                
     elif pattern == "hex":
         size = 40 * scale
         h = size * math.sqrt(3)
@@ -103,12 +102,37 @@ def draw_pattern(draw, pattern, width, height, color, alpha, scale):
                     angle = math.radians(i * 60)
                     points.append((x + size * math.cos(angle), py + size * math.sin(angle)))
                 draw.polygon(points, outline=p_color, width=2*scale)
+                
     elif pattern == "rays":
         for i in range(0, 360, 15):
             angle = math.radians(i)
             end_x = width // 2 + 3000 * math.cos(angle)
             end_y = height // 2 + 3000 * math.sin(angle)
             draw.line([(width//2, height//2), (end_x, end_y)], fill=p_color, width=3*scale)
+
+    elif pattern == "waves":
+        amplitude = 20 * scale
+        wavelength = 150 * scale
+        for y in range(0, height + 100, 40 * scale):
+            points = []
+            for x in range(0, width + 10, 10):
+                py = y + amplitude * math.sin((x / wavelength) * 2 * math.pi)
+                points.append((x, py))
+            draw.line(points, fill=p_color, width=2*scale)
+
+    elif pattern == "circuit":
+        for _ in range(30):
+            x, y = random.randint(0, width), random.randint(0, height)
+            length = random.randint(100, 400) * scale
+            direction = random.choice([(1,0), (0,1), (1,1), (-1,1)])
+            draw.line([(x, y), (x + direction[0]*length, y + direction[1]*length)], fill=p_color, width=2*scale)
+            draw.ellipse([x-4*scale, y-4*scale, x+4*scale, y+4*scale], fill=p_color)
+
+    elif pattern == "stars":
+        for _ in range(200):
+            x, y = random.randint(0, width), random.randint(0, height)
+            s_size = random.randint(1, 3) * scale
+            draw.ellipse([x, y, x+s_size, y+s_size], fill=p_color)
 
 def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk", 
                   primary=None, secondary=None, pattern=None, align="center", 
@@ -117,15 +141,12 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
                   vignette=False, border_width=0):
     scale = 4
     width, height = 1280 * scale, 400 * scale
-    
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
     theme_bg, theme_p, theme_s, theme_pattern = theme_data
-    
     p_color = hex_to_rgb(primary) if primary else theme_p
     s_color = hex_to_rgb(secondary) if secondary else theme_s
     active_pattern = pattern if pattern else theme_pattern
 
-    # 1. Background (Solid vs Gradient vs Image)
     if bg_path and os.path.exists(bg_path):
         bg_img = Image.open(bg_path).convert('RGB')
         img = ImageOps.fit(bg_img, (width, height), centering=(0.5, 0.5))
@@ -139,23 +160,21 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
     else:
         img = Image.new('RGB', (width, height), color=theme_bg)
     
-    # 2. Effects
-    if vignette:
-        img = draw_vignette(img)
-        
+    if vignette: img = draw_vignette(img)
     layer = Image.new('RGBA', (width, height), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
     
-    # 3. Pattern
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
     
-    # 4. Brand Glow
+    s_alpha = int(255 * (alpha_scanlines/100))
+    for y in range(0, height, 4 * scale):
+        draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
+        
     g_alpha = int(255 * (alpha_glow/100))
     draw.ellipse([width//2-600*scale, height//2-400*scale, width//2+600*scale, height//2+400*scale], fill=(p_color[0], p_color[1], p_color[2], g_alpha)) 
-    draw.ellipse([width//5-300*scale, height//5-300*scale, width//5+300*scale, height//5+300*scale], fill=(s_color[0], s_color[1], s_color[2], int(g_alpha*0.8))) 
+    draw.ellipse([width//4-200*scale, height//4-200*scale, width//4+200*scale, height//4+200*scale], fill=(s_color[0], s_color[1], s_color[2], int(g_alpha*0.8))) 
 
-    # 5. Text
     if not no_text:
         font_path = download_font(font_choice)
         if font_path:
@@ -163,31 +182,21 @@ def create_banner(name, output_path="banner.png", bg_path=None, theme="cyberpunk
             font = ImageFont.truetype(font_path, size)
         else:
             font = ImageFont.load_default()
-
         bbox = font.getbbox(name)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         padding = 100 * scale
         tx = padding if align == "left" else (width - tw - padding if align == "right" else (width - tw) // 2)
         ty = (height - th) // 2
-        
         offset = 3 * scale
         draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
         draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
         draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
     
-    # 6. Scanlines
-    s_alpha = int(255 * (alpha_scanlines/100))
-    for y in range(0, height, 4 * scale):
-        draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
-
-    # 7. Border
     if border_width > 0:
         b_px = border_width * scale
         draw.rectangle([0, 0, width, height], outline=(p_color[0], p_color[1], p_color[2], 200), width=b_px)
 
     img.paste(layer, (0,0), layer)
-    
-    # 8. Footer
     footer_font_path = download_font("inter")
     if footer_font_path:
         small_font = ImageFont.truetype(footer_font_path, 22 * scale)
@@ -207,23 +216,22 @@ def main():
     parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument("-f", "--font", default="orbitron", help="Font choice")
     parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme preset")
-    parser.add_argument("-p", "--pattern", help="Background pattern")
+    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "none"], help="Pattern")
     parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
     parser.add_argument("-b", "--bg", help="Background path")
-    parser.add_argument("--primary", help="Primary hex color")
-    parser.add_argument("--secondary", help="Secondary hex color")
+    parser.add_argument("--primary", help="Primary hex")
+    parser.add_argument("--secondary", help="Secondary hex")
     parser.add_argument("--gradient", action="store_true", help="Enable gradient")
-    parser.add_argument("--vignette", action="store_true", help="Enable dark vignette edges")
-    parser.add_argument("--border", type=int, default=0, help="Outer border width in pixels")
+    parser.add_argument("--vignette", action="store_true", help="Enable vignette")
+    parser.add_argument("--border", type=int, default=0, help="Border width")
     parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
     parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
     parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
     parser.add_argument("--no-text", action="store_true", help="Skip text")
-    
     args = parser.parse_args()
-    output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
     
-    print(f"🎨 BrandPulse v{VERSION} // HD Rendering with Effects...")
+    output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
+    print(f"🎨 BrandPulse v{VERSION} // HD Patterns...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
