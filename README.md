@@ -21,6 +21,10 @@ GitHub READMEs are the front door to your projects. Manually creating banners in
 | :---: | :---: |
 | ![Ocean](examples/ocean_diamond.png) | ![Minimal](examples/mono_minimal.png) |
 
+| 90s Laser School (Yearbook Grid) | Retro 90s (Squiggles) |
+| :---: | :---: |
+| ![Laser School](examples/clean_neon_final.png) | ![Retro 90s](examples/jazz_cup.png) |
+
 ## ✨ Features
 - [x] **4X Super-sampling**: Renders at 3840x1200 for razor-sharp edges.
 - [x] **Theme Presets**: `Cyberpunk`, `Matrix`, `Sunset`, `Forest`, `Ocean`, and `Mono`.
