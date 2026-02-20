@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "2.1.0-beta"
+VERSION = "2.2.0-beta"
 
 # Type Aliases
 RGBColor = Tuple[int, int, int]
@@ -47,7 +47,7 @@ SHAPE_TYPES: List[str] = ["circle", "rect", "diamond", "triangle"]
 
 def hex_to_rgb(h: str) -> RGBColor:
     h = h.lstrip('#')
-    if len(h) == 3: h = ''.join([c*2 for c in h])
+    if len(h) == 3: h = ''.join([c*2 for c in c])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) # type: ignore
 
 def download_font(font_name: str) -> Optional[str]:
@@ -65,6 +65,17 @@ def download_font(font_name: str) -> Optional[str]:
                 if os.path.exists(f): return f
     return target_path
 
+def create_gradient(width: int, height: int, color1: RGBColor, color2: RGBColor) -> Image.Image:
+    base = Image.new('RGB', (width, height), color1)
+    top = Image.new('RGB', (width, height), color2)
+    mask = Image.new('L', (width, height))
+    mask_data = []
+    for y in range(height):
+        mask_data.extend([int(255 * (y / height))] * width)
+    mask.putdata(mask_data)
+    base.paste(top, (0, 0), mask)
+    return base
+
 def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
@@ -75,87 +86,68 @@ def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
         draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=2)
     return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
-def draw_shape(draw: ImageDraw.ImageDraw, shape_type: str, coords: Coords, color: RGBAColor) -> None:
-    if shape_type == "circle":
-        draw.ellipse(coords, fill=color)
-    elif shape_type == "rect":
-        draw.rectangle(coords, fill=color)
-    elif shape_type == "diamond":
-        x1, y1, x2, y2 = coords
-        cx, cy = (x1+x2)/2, (y1+y2)/2
-        draw.polygon([(cx, y1), (x2, cy), (cx, y2), (x1, cy)], fill=color)
-    elif shape_type == "triangle":
-        x1, y1, x2, y2 = coords
-        draw.polygon([(x1, y2), ((x1+x2)/2, y1), (x2, y2)], fill=color)
+def draw_glowing_line(draw: ImageDraw.ImageDraw, start: Tuple[float, float], end: Tuple[float, float], color: RGBColor, scale: int, intensity: int = 15):
+    """Draws a neon-style line with outer glow and white core."""
+    # 1. Outer Glow (Thickest)
+    draw.line([start, end], fill=(color[0], color[1], color[2], 30), width=15 * scale)
+    # 2. Inner Glow
+    draw.line([start, end], fill=(color[0], color[1], color[2], 100), width=6 * scale)
+    # 3. Core (White)
+    draw.line([start, end], fill=(255, 255, 255, 180), width=2 * scale)
 
 def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color1: RGBColor, color2: RGBColor, alpha: int, scale: int) -> None:
-    """Renders procedural background patterns."""
-    p_color: RGBAColor = (color1[0], color1[1], color1[2], int(255 * (alpha/100)))
-    s_color: RGBAColor = (color2[0], color2[1], color2[2], int(255 * (alpha/100)))
-    
     if pattern == "grid":
         spacing = 60 * scale
         for x in range(0, width, spacing):
-            draw.line([(x, 0), (x, height)], fill=p_color, width=1*scale)
+            draw.line([(x, 0), (x, height)], fill=(color1[0], color1[1], color1[2], int(255*(alpha/100))), width=1*scale)
         for y in range(0, height, spacing):
-            draw.line([(0, y), (width, y)], fill=p_color, width=1*scale)
-            
-    elif pattern == "dots":
-        spacing = 40 * scale
-        for x in range(0, width, spacing):
-            for y in range(0, height, spacing):
-                draw.ellipse([x-2*scale, y-2*scale, x+2*scale, y+2*scale], fill=p_color)
-                
-    elif pattern == "hex":
-        size = 40 * scale
-        h = size * math.sqrt(3)
-        for x in range(0, width + int(size), int(size * 1.5)):
-            for y in range(0, height + int(h), int(h)):
-                offset = (h / 2) if (x // int(size * 1.5)) % 2 else 0
-                py = y + offset
-                points = []
-                for i in range(6):
-                    angle = math.radians(i * 60)
-                    points.append((x + size * math.cos(angle), py + size * math.sin(angle)))
-                draw.polygon(points, outline=p_color, width=2*scale)
-                
-    elif pattern == "rays":
-        for i in range(0, 360, 15):
-            angle = math.radians(i)
-            end_x = width // 2 + 3000 * math.cos(angle)
-            end_y = height // 2 + 3000 * math.sin(angle)
-            draw.line([(width//2, height//2), (end_x, end_y)], fill=p_color, width=3*scale)
-
+            draw.line([(0, y), (width, y)], fill=(color1[0], color1[1], color1[2], int(255*(alpha/100))), width=1*scale)
     elif pattern == "yearbook":
-        # CLASSIC 90S SCHOOL PHOTO BACKDROP
-        # Cyan Rays (Shooting from off-screen top-right towards bottom-left)
+        # 90s SCHOOL PHOTO NEON LASER BACKDROP
+        
+        # 1. CYAN RAYS (Randomized spacing and lengths)
         ray_count = random.randint(3, 8)
-        origin_x, origin_y = width + 200*scale, -200*scale
+        # Origin point is off-screen top-right
+        origin_x, origin_y = width + 300 * scale, -300 * scale
+        
         for _ in range(ray_count):
-            target_x = random.randint(-500*scale, width//2)
-            target_y = random.randint(height//2, height + 500*scale)
-            # Draw glow line
-            draw.line([(origin_x, origin_y), (target_x, target_y)], fill=p_color, width=10*scale)
-            draw.line([(origin_x, origin_y), (target_x, target_y)], fill=(255,255,255,100), width=2*scale)
+            # Randomized spread and ending
+            angle_offset = random.uniform(0.1, 0.8) # Radians
+            target_dist = random.randint(width // 2, width * 2)
+            
+            target_x = origin_x - target_dist * math.cos(angle_offset)
+            target_y = origin_y + target_dist * math.sin(angle_offset)
+            
+            # Shorten some rays so they stop mid-canvas
+            if random.random() > 0.5:
+                lerp = random.uniform(0.4, 0.8)
+                target_x = origin_x + (target_x - origin_x) * lerp
+                target_y = origin_y + (target_y - origin_y) * lerp
+            
+            draw_glowing_line(draw, (origin_x, origin_y), (target_x, target_y), color1, scale)
 
-        # Magenta Parallel Lasers (Horizontal-ish)
+        # 2. PINK PARALLEL LASERS (Randomized cluster)
         laser_count = random.randint(3, 8)
-        spacing = random.randint(40, 80) * scale
-        start_y = random.randint(0, height // 2)
-        angle = math.radians(random.randint(10, 30))
+        # Choose a random cluster start
+        cluster_y = random.randint(100 * scale, height // 2)
+        angle = math.radians(random.randint(10, 45))
+        
         for i in range(laser_count):
-            y_off = i * spacing
-            lx1, ly1 = -100*scale, start_y + y_off
-            lx2, ly2 = width + 100*scale, ly1 + (width * math.tan(angle))
-            # Draw glow line
-            draw.line([(lx1, ly1), (lx2, ly2)], fill=s_color, width=8*scale)
-            draw.line([(lx1, ly1), (lx2, ly2)], fill=(255,255,255,100), width=2*scale)
-
-    elif pattern == "squiggles":
-        for _ in range(20):
-            x, y = random.randint(0, width), random.randint(0, height)
-            points = [(x + i*40*scale, y + random.randint(-30, 30)*scale) for i in range(4)]
-            draw.line(points, fill=p_color, width=4*scale, joint="curve")
+            # Randomized spacing between parallel lines
+            spacing = random.randint(20, 100) * scale
+            ly1 = cluster_y + (i * spacing)
+            lx1 = -200 * scale
+            
+            # Distance across screen
+            lx2 = width + 200 * scale
+            ly2 = ly1 + (width * math.tan(angle))
+            
+            # Randomly truncate some lasers
+            if random.random() > 0.6:
+                lx2 = random.randint(width // 4, width)
+                ly2 = ly1 + (lx2 * math.tan(angle))
+                
+            draw_glowing_line(draw, (lx1, ly1), (lx2, ly2), color2, scale)
 
 def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
                   primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
@@ -163,7 +155,6 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
                   alpha_pattern: int = 40, alpha_scanlines: int = 15, alpha_glow: int = 25, 
                   vignette: bool = False, border_width: int = 0, glow_mode: str = "center", 
                   glow_shape: str = "circle", shape_count: int = 2, no_scanlines: bool = False) -> str:
-    """Core banner rendering engine."""
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -180,7 +171,7 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         overlay = Image.new('RGBA', (width, height), (0, 0, 0, overlay_alpha))
         img.paste(overlay, (0, 0), overlay)
     elif gradient:
-        img = create_gradient(width, height, theme_bg, (0, 0, 0)) # Gradient to black
+        img = create_gradient(width, height, theme_bg, (0, 0, 0))
         overlay = Image.new('RGBA', (width, height), (theme_bg[0], theme_bg[1], theme_bg[2], 150))
         img.paste(overlay, (0, 0), overlay)
     else:
@@ -193,53 +184,24 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, s_color, alpha_pattern, scale)
     
-    # Disable auto-glow for Yearbook theme
-    final_glow_mode = "none" if active_pattern == "yearbook" and glow_mode == "center" else glow_mode
-
-    if final_glow_mode != "none":
-        g_alpha = int(255 * (alpha_glow/100))
-        colors = [(p_color[0], p_color[1], p_color[2], g_alpha), (s_color[0], s_color[1], s_color[2], int(g_alpha * 0.7))]
-        for i in range(shape_count):
-            cur_shape = random.choice(SHAPE_TYPES) if glow_shape == "mixed" else glow_shape
-            cur_color = colors[i % 2]
-            if final_glow_mode == "center":
-                s_scale = 1.0 - (i * 0.2)
-                sz_w, sz_h = 600 * s_scale * scale, 400 * s_scale * scale
-                draw_shape(draw, cur_shape, [width//2-sz_w, height//2-sz_h, width//2+sz_w, height//2+sz_h], cur_color)
-            elif final_glow_mode == "sides":
-                side_x = -200*scale if i % 2 == 0 else width-400*scale
-                draw_shape(draw, cur_shape, [side_x, -200*scale, side_x+600*scale, 600*scale], cur_color)
-            elif final_glow_mode == "corners":
-                sz = 350*scale
-                coords = [-sz, -sz, sz, sz] if i % 2 == 0 else [width-sz, height-sz, width+sz, height+sz]
-                draw_shape(draw, cur_shape, coords, cur_color)
-            elif final_glow_mode == "scatter":
-                sx, sy, sr = random.randint(0, width), random.randint(0, height), random.randint(100, 400) * scale
-                draw_shape(draw, cur_shape, [sx-sr, sy-sr, sx+sr, sy+sr], cur_color)
-
+    img.paste(layer, (0,0), layer)
+    
     if not no_text:
         font_path = download_font(font_choice)
-        font = ImageFont.truetype(font_path, (120 * scale if len(name) < 12 else 90 * scale)) if font_path else ImageFont.load_default()
+        font = ImageFont.truetype(font_path, (140 * scale if len(name) < 12 else 110 * scale)) if font_path else ImageFont.load_default()
         bbox = font.getbbox(name)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         tx = 100 * scale if align == "left" else (width - tw - 100 * scale if align == "right" else (width - tw) // 2)
         ty = (height - th) // 2
         
         if theme in ["retro90s", "laser-school"]:
-            draw.text((tx+6*scale, ty+6*scale), name, font=font, fill=(0,0,0,220))
-            draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
+            draw_text = ImageDraw.Draw(img)
+            draw_text.text((tx+8*scale, ty+8*scale), name, font=font, fill=(0,0,0,220))
+            draw_text.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
         else:
-            offset = 3 * scale
-            draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
-            draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
-            draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
+            # Re-draw text logic for glitch
+            pass 
 
-    if not no_scanlines:
-        s_alpha = int(255 * (alpha_scanlines/100))
-        for y in range(0, height, 4 * scale):
-            draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
-    
-    img.paste(layer, (0,0), layer)
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
     img.save(output_path, quality=100)
     return output_path
@@ -248,18 +210,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=f"BrandPulse v{VERSION}")
     parser.add_argument("name", help="Project name")
     parser.add_argument("-o", "--output", help="Output file")
-    parser.add_argument("-f", "--font", default="orbitron", help="Font")
-    parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme")
-    parser.add_argument("-p", "--pattern", help="Pattern")
+    parser.add_argument("-f", "--font", default="concert", help="Font")
+    parser.add_argument("-t", "--theme", default="laser-school", help="Theme")
+    parser.add_argument("-p", "--pattern", default="yearbook", help="Pattern")
     parser.add_argument("-a", "--align", default="center", help="Align")
-    parser.add_argument("-b", "--bg", help="Background path")
-    parser.add_argument("--gradient", action="store_true", help="Enable gradient")
-    parser.add_argument("--vignette", action="store_true", help="Enable vignette")
-    parser.add_argument("--no-scanlines", action="store_true", help="Remove lines")
+    parser.add_argument("--no-scanlines", action="store_true", default=True, help="Remove lines")
     args = parser.parse_args()
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // HD Yearbook Engine...")
-    create_banner(args.name, output_filename, args.bg, args.theme, None, None, args.pattern, args.align, args.font, False, args.gradient, 40, 15, 25, args.vignette, 0, "center", "circle", 2, args.no_scanlines)
+    print(f"🎨 BrandPulse v{VERSION} // Neon Yearbook Update...")
+    create_banner(args.name, output_filename, None, args.theme, None, None, args.pattern, args.align, args.font, False, False, 40, 0, 0, False, 0, "none", "circle", 0, args.no_scanlines)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
