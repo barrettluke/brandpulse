@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "2.8.0-beta"
+VERSION = "2.9.0-beta"
 
 # Type Aliases
 RGBColor = Tuple[int, int, int]
@@ -88,10 +88,8 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
         # Perfectly aligned diagonal rays to form repeating diamond grid
         origin_top = (width * 1.5, -height * 0.5)
         origin_bottom = (width * 1.5, height * 1.5)
-        
-        count = 12 # More rays for a tighter grid
-        
-        # Cyan Rays (Downward slant)
+        count = 12 
+        # Cyan Rays
         for i in range(count):
             offset = (i - count//2) * (200 * scale)
             start = (origin_top[0] + offset, origin_top[1])
@@ -99,8 +97,7 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
             length = width * 6
             end = (start[0] + length * math.cos(angle), start[1] + length * math.sin(angle))
             draw_yearbook_laser(draw, start, end, color1, scale, 5)
-
-        # Pink Rays (Upward slant)
+        # Pink Rays
         for i in range(count):
             offset = (i - count//2) * (200 * scale)
             start = (origin_bottom[0] + offset, origin_bottom[1])
@@ -123,7 +120,7 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     s_color = hex_to_rgb(secondary) if secondary else theme_s
     active_pattern = pattern if pattern else theme_pattern
 
-    # Backdrop
+    # Background Backdrop (Studio Blue)
     bg_top = (30, 70, 160)
     bg_bottom = (10, 15, 45)
     img = Image.new('RGB', (width, height), color=bg_bottom)
@@ -135,31 +132,43 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     mask.putdata(mask_data)
     img.paste(top_layer, (0, 0), mask)
     
-    # Draw Patterns
+    # Draw Patterns onto temporary layer
     layer = Image.new('RGBA', (width, height), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, s_color, alpha_pattern, scale)
+    
+    # COMPOSITE PATTERN OVER BACKGROUND
     img.paste(layer, (0,0), layer)
     
-    # Studio Vignette
+    # ADD VIGNETTE
     img = draw_vignette(img, 0.45)
     
     if not no_text:
+        # Resolve Font
         font_path = download_font(font_choice)
         font = ImageFont.truetype(font_path, (180 * scale if len(name) < 12 else 140 * scale)) if font_path else ImageFont.load_default()
+        
+        # Calculate Text Position
         bbox = font.getbbox(name)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        tx = (width - tw) // 2
-        ty = (height - th) // 2
+        tx, ty = (width - tw) // 2, (height - th) // 2
         
-        # 90s Block Shadow (ONLY THE SHADOW, NO BOX)
-        draw_text = ImageDraw.Draw(img)
-        # Deep, hard offset shadow
-        draw_text.text((tx+10*scale, ty+10*scale), name, font=font, fill=(0,0,0,255))
-        # Main white text
-        draw_text.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
+        # CREATE A TEXT OVERLAY LAYER
+        text_layer = Image.new('RGBA', (width, height), (0,0,0,0))
+        text_draw = ImageDraw.Draw(text_layer)
+        
+        # DRAW ONLY THE SHADOW AND TEXT (ABSOLUTELY NO RECTANGLES/BOXES)
+        # 1. High-Fidelity 90s Block Shadow (Black)
+        shadow_offset = 12 * scale
+        text_draw.text((tx + shadow_offset, ty + shadow_offset), name, font=font, fill=(0, 0, 0, 255))
+        # 2. Main White Text
+        text_draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
+        
+        # FINAL MERGE
+        img.paste(text_layer, (0,0), text_layer)
 
+    # RESIZE FOR OUTPUT
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
     img.save(output_path, quality=100)
     return output_path
@@ -172,8 +181,9 @@ def main() -> None:
     parser.add_argument("-t", "--theme", default="laser-school")
     parser.add_argument("-p", "--pattern", default="yearbook")
     args = parser.parse_args()
+    
     out = args.output if args.output else "banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Clean Neon Grid Engine...")
+    print(f"🎨 BrandPulse v{VERSION} // Boxless Yearbook Rendering...")
     create_banner(args.name, out, None, args.theme, None, None, args.pattern, "center", args.font)
     print(f"✅ Success! {out}")
 
