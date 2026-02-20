@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "1.9.0"
+VERSION = "1.9.1-beta"
 
 # Type Aliases for readability
 RGBColor = Tuple[int, int, int]
@@ -23,7 +23,8 @@ THEMES: Dict[str, Tuple[RGBColor, RGBColor, RGBColor, str]] = {
     "sunset": ((45, 10, 50), (255, 82, 82), (255, 193, 7), "rays"),
     "forest": ((10, 30, 10), (164, 255, 150), (34, 139, 34), "hex"),
     "ocean": ((5, 20, 40), (0, 191, 255), (30, 144, 255), "waves"),
-    "mono": ((10, 10, 10), (240, 240, 240), (100, 100, 100), "dots")
+    "mono": ((10, 10, 10), (240, 240, 240), (100, 100, 100), "dots"),
+    "retro90s": ((255, 255, 255), (255, 0, 255), (0, 255, 255), "squiggles") # White BG, Pink/Teal
 }
 
 # Verified URLs
@@ -44,7 +45,7 @@ SHAPE_TYPES: List[str] = ["circle", "rect", "diamond", "triangle"]
 def hex_to_rgb(h: str) -> RGBColor:
     """Converts hex color string to RGB tuple."""
     h = h.lstrip('#')
-    if len(h) == 3: h = ''.join([c*2 for c in h])
+    if len(h) == 3: h = ''.join([c*2 for c in c])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) # type: ignore
 
 def download_font(font_name: str) -> Optional[str]:
@@ -150,6 +151,13 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
             x, y = random.randint(0, width), random.randint(0, height)
             s_size = random.randint(1, 3) * scale
             draw.ellipse([x, y, x+s_size, y+s_size], fill=p_color)
+    elif pattern == "squiggles":
+        for _ in range(15):
+            x, y = random.randint(0, width), random.randint(0, height)
+            points = []
+            for i in range(5):
+                points.append((x + i*50*scale, y + random.randint(-20, 20)*scale))
+            draw.line(points, fill=p_color, width=4*scale, joint="curve")
 
 def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
                   primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
@@ -225,10 +233,16 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         padding = 100 * scale
         tx = padding if align == "left" else (width - tw - padding if align == "right" else (width - tw) // 2)
         ty = (height - th) // 2
-        offset = 3 * scale
-        draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
-        draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
-        draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
+        
+        # Retro 90s uses black shadow instead of glitch if theme is 90s
+        if theme == "retro90s":
+            draw.text((tx+5*scale, ty+5*scale), name, font=font, fill=(0,0,0,150))
+            draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
+        else:
+            offset = 3 * scale
+            draw.text((tx-offset, ty), name, font=font, fill=(s_color[0], s_color[1], s_color[2], 255)) 
+            draw.text((tx+offset, ty), name, font=font, fill=(p_color[0], p_color[1], p_color[2], 255)) 
+            draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255)) 
 
     if not no_scanlines:
         s_alpha = int(255 * (alpha_scanlines/100))
@@ -259,7 +273,7 @@ def main() -> None:
     parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument("-f", "--font", default="orbitron", help="Font choice")
     parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme preset")
-    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "none"], help="Pattern")
+    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "none"], help="Pattern")
     parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
     parser.add_argument("-b", "--bg", help="Background path")
     parser.add_argument("--primary", help="Primary hex")
@@ -281,7 +295,7 @@ def main() -> None:
     
     if args.random:
         args.theme = random.choice(list(THEMES.keys()))
-        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "none"])
+        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "none"])
         args.font = random.choice(list(FONT_URLS.keys()))
         args.align = random.choice(["left", "center", "right"])
         args.glow = random.choice(["center", "sides", "corners", "scatter", "none"])
@@ -295,7 +309,7 @@ def main() -> None:
         args.alpha_glow = random.randint(10, 90)
 
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Processing...")
+    print(f"🎨 BrandPulse v{VERSION} // Theme: {args.theme}...")
     create_banner(args.name, output_filename, args.bg, args.theme, 
                   args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
                   args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
