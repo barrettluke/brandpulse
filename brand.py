@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "2.5.1-beta"
+VERSION = "2.6.0-beta"
 
 # Type Aliases
 RGBColor = Tuple[int, int, int]
@@ -67,47 +67,55 @@ def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    for i in range(100):
-        alpha = int(255 * intensity * (i / 100)**2)
+    for i in range(120):
+        alpha = int(255 * intensity * (i / 120)**2)
         inset = i * 2
-        draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=2)
+        draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=3)
     return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
 def draw_yearbook_laser(draw: ImageDraw.ImageDraw, start: Tuple[float, float], end: Tuple[float, float], color: RGBColor, scale: int, thickness: int):
     """Draws a soft-focus yearbook style laser beam."""
     # 1. Very wide soft diffusion
-    draw.line([start, end], fill=(color[0], color[1], color[2], 20), width=thickness * 3 * scale)
-    # 2. Focused glow
-    draw.line([start, end], fill=(color[0], color[1], color[2], 60), width=thickness * scale)
-    # 3. Inner core (lighter color)
-    core_color = tuple(min(255, c + 150) for c in color)
-    draw.line([start, end], fill=(*core_color, 120), width=max(1, thickness // 3) * scale)
+    draw.line([start, end], fill=(color[0], color[1], color[2], 25), width=thickness * 4 * scale)
+    # 2. Focused vibrant glow
+    draw.line([start, end], fill=(color[0], color[1], color[2], 100), width=thickness * scale)
+    # 3. Inner core (lighter version of the color)
+    core_color = tuple(min(255, c + 180) for c in color)
+    draw.line([start, end], fill=(*core_color, 180), width=max(2, thickness // 2) * scale)
 
 def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color1: RGBColor, color2: RGBColor, alpha: int, scale: int) -> None:
     if pattern == "yearbook":
-        # Perfectly equal angular spacing
-        origin_x, origin_y = width * 1.5, -height * 0.5
-        ray_count = random.randint(4, 6)
-        base_angle = math.radians(150)
-        spread = math.radians(20)
+        # FULL-BLEED DIAMOND GRID ENGINE
+        
+        # 1. CYAN RAYS (Perspective Fan from off-screen)
+        origin_x, origin_y = width * 1.6, -height * 0.4
+        ray_count = random.randint(5, 8)
+        # Wider spread to ensure it covers the full width/height
+        base_angle = math.radians(160)
+        spread = math.radians(45)
+        
         for i in range(ray_count):
             angle = base_angle - (spread / 2) + (i * (spread / (ray_count - 1)))
-            length = width * 5
+            # Length to shoot past the entire opposite corner
+            length = width * 6
             target_x = origin_x + length * math.cos(angle)
             target_y = origin_y + length * math.sin(angle)
             draw_yearbook_laser(draw, (origin_x, origin_y), (target_x, target_y), color1, scale, 6)
 
-        # Perfectly parallel crossing lasers
-        laser_count = random.randint(4, 6)
-        spacing = 110 * scale
-        start_y = -height * 0.2
-        angle = math.radians(18)
+        # 2. PINK PARALLEL LASERS (Consistent slant to form diamonds)
+        laser_count = random.randint(5, 8)
+        # Calculate spacing to fill the height precisely
+        spacing = (height * 1.5) / (laser_count - 1)
+        start_y = -height * 0.5 # Start high to ensure overlap
+        angle = math.radians(22) # Classic school photo slant
+        
         for i in range(laser_count):
             ly1 = start_y + (i * spacing)
-            lx1 = -500 * scale
-            lx2 = width + 500 * scale
+            lx1 = -width * 0.5
+            lx2 = width * 1.5
+            # End Y based on angle across the whole width
             ly2 = ly1 + ((lx2 - lx1) * math.tan(angle))
-            draw_yearbook_laser(draw, (lx1, ly1), (lx2, ly2), color2, scale, 5)
+            draw_yearbook_laser(draw, (lx1, ly1), (lx2, ly2), color2, scale, 6)
 
 def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
                   primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
@@ -123,34 +131,38 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     s_color = hex_to_rgb(secondary) if secondary else theme_s
     active_pattern = pattern if pattern else theme_pattern
 
-    # Background Gradient
-    top_blue = (40, 120, 200)
-    bottom_blue = (10, 20, 60)
-    img = Image.new('RGB', (width, height), color=bottom_blue)
-    top_layer = Image.new('RGB', (width, height), color=top_blue)
+    # High-Fidelity Blue Backdrop (Deep Studio Blue)
+    bg_top = (30, 60, 140)
+    bg_bottom = (10, 15, 45)
+    img = Image.new('RGB', (width, height), color=bg_bottom)
+    top_layer = Image.new('RGB', (width, height), color=bg_top)
     mask = Image.new('L', (width, height))
     mask_data = []
     for y in range(height):
-        mask_data.extend([int(255 * (1 - y / height))] * width)
+        # Slightly slanted background gradient
+        mask_data.extend([int(255 * (1 - (y / height)))] * width)
     mask.putdata(mask_data)
     img.paste(top_layer, (0, 0), mask)
     
+    # Layer for drawing patterns
     layer = Image.new('RGBA', (width, height), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
     if active_pattern != "none":
         draw_pattern(draw, active_pattern, width, height, p_color, s_color, alpha_pattern, scale)
     img.paste(layer, (0,0), layer)
-    img = draw_vignette(img, 0.4)
+    
+    # Studio Vignette
+    img = draw_vignette(img, 0.45)
     
     if not no_text:
         font_path = download_font(font_choice)
-        font = ImageFont.truetype(font_path, (150 * scale if len(name) < 12 else 120 * scale)) if font_path else ImageFont.load_default()
+        font = ImageFont.truetype(font_path, (160 * scale if len(name) < 12 else 120 * scale)) if font_path else ImageFont.load_default()
         bbox = font.getbbox(name)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         tx = (width - tw) // 2
         ty = (height - th) // 2
         draw_text = ImageDraw.Draw(img)
-        draw_text.text((tx+12*scale, ty+12*scale), name, font=font, fill=(0,0,0,180))
+        draw_text.text((tx+12*scale, ty+12*scale), name, font=font, fill=(0,0,0,200))
         draw_text.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
 
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
@@ -166,7 +178,7 @@ def main() -> None:
     parser.add_argument("-p", "--pattern", default="yearbook")
     args = parser.parse_args()
     out = args.output if args.output else "banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Authentic Yearbook Rendering...")
+    print(f"🎨 BrandPulse v{VERSION} // Full-Bleed Yearbook Grid...")
     create_banner(args.name, out, None, args.theme, None, None, args.pattern, "center", args.font)
     print(f"✅ Success! {out}")
 
