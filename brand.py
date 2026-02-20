@@ -9,14 +9,14 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "1.9.1-beta"
+VERSION = "2.0.0-beta"
 
-# Type Aliases for readability
+# Type Aliases
 RGBColor = Tuple[int, int, int]
 RGBAColor = Tuple[int, int, int, int]
 Coords = List[float]
 
-# Theme Presets: (BG_Color, Primary_Color, Secondary_Color, Default_Pattern)
+# Theme Presets
 THEMES: Dict[str, Tuple[RGBColor, RGBColor, RGBColor, str]] = {
     "cyberpunk": ((13, 17, 23), (0, 232, 232), (232, 0, 232), "grid"),
     "matrix": ((0, 5, 0), (0, 255, 65), (0, 143, 17), "dots"),
@@ -24,7 +24,8 @@ THEMES: Dict[str, Tuple[RGBColor, RGBColor, RGBColor, str]] = {
     "forest": ((10, 30, 10), (164, 255, 150), (34, 139, 34), "hex"),
     "ocean": ((5, 20, 40), (0, 191, 255), (30, 144, 255), "waves"),
     "mono": ((10, 10, 10), (240, 240, 240), (100, 100, 100), "dots"),
-    "retro90s": ((255, 255, 255), (255, 0, 255), (0, 255, 255), "squiggles") # White BG, Pink/Teal
+    "retro90s": ((255, 255, 255), (255, 0, 255), (0, 255, 255), "squiggles"),
+    "laser-school": ((20, 20, 60), (0, 255, 255), (255, 20, 147), "lasers") # Blue BG, Cyan/Pink Lasers
 }
 
 # Verified URLs
@@ -32,7 +33,9 @@ FONT_URLS: Dict[str, str] = {
     "orbitron": "https://github.com/google/fonts/raw/main/ofl/orbitron/static/Orbitron-Black.ttf",
     "space": "https://github.com/google/fonts/raw/main/ofl/spacegrotesk/static/SpaceGrotesk-Bold.ttf",
     "press-start": "https://github.com/google/fonts/raw/main/ofl/pressstart2p/PressStart2P-Regular.ttf",
-    "inter": "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Black.ttf"
+    "inter": "https://github.com/google/fonts/raw/main/ofl/inter/static/Inter-Black.ttf",
+    "lobster": "https://github.com/google/fonts/raw/main/ofl/lobster/Lobster-Regular.ttf", # 90s Script
+    "concert": "https://github.com/google/fonts/raw/main/ofl/concertone/ConcertOne-Regular.ttf" # 90s Bold
 }
 
 SYSTEM_FONTS: List[str] = [
@@ -43,22 +46,18 @@ SYSTEM_FONTS: List[str] = [
 SHAPE_TYPES: List[str] = ["circle", "rect", "diamond", "triangle"]
 
 def hex_to_rgb(h: str) -> RGBColor:
-    """Converts hex color string to RGB tuple."""
     h = h.lstrip('#')
     if len(h) == 3: h = ''.join([c*2 for c in c])
     return tuple(int(h[i:i+2], 16) for i in (0, 2, 4)) # type: ignore
 
 def download_font(font_name: str) -> Optional[str]:
-    """Downloads a TTF font from GitHub or returns a system fallback."""
     url = FONT_URLS.get(font_name.lower())
     if not url: return None
-    
-    target_path = os.path.join(tempfile.gettempdir(), f"bp_v4_{font_name}.ttf")
+    target_path = os.path.join(tempfile.gettempdir(), f"bp_v5_{font_name}.ttf")
     if not os.path.exists(target_path):
         try:
-            user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             opener = urllib.request.build_opener()
-            opener.addheaders = [('User-agent', user_agent)]
+            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
             urllib.request.install_opener(opener)
             urllib.request.urlretrieve(url, target_path)
         except:
@@ -67,7 +66,6 @@ def download_font(font_name: str) -> Optional[str]:
     return target_path
 
 def create_gradient(width: int, height: int, color1: RGBColor, color2: RGBColor) -> Image.Image:
-    """Creates a vertical RGB gradient image."""
     base = Image.new('RGB', (width, height), color1)
     top = Image.new('RGB', (width, height), color2)
     mask = Image.new('L', (width, height))
@@ -79,7 +77,6 @@ def create_gradient(width: int, height: int, color1: RGBColor, color2: RGBColor)
     return base
 
 def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
-    """Applies a dark vignette overlay to an image."""
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -90,7 +87,6 @@ def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
     return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
 
 def draw_shape(draw: ImageDraw.ImageDraw, shape_type: str, coords: Coords, color: RGBAColor) -> None:
-    """Draws a specific geometric shape onto an ImageDraw object."""
     if shape_type == "circle":
         draw.ellipse(coords, fill=color)
     elif shape_type == "rect":
@@ -104,7 +100,6 @@ def draw_shape(draw: ImageDraw.ImageDraw, shape_type: str, coords: Coords, color
         draw.polygon([(x1, y2), ((x1+x2)/2, y1), (x2, y2)], fill=color)
 
 def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color: RGBColor, alpha: int, scale: int) -> None:
-    """Renders procedural background patterns."""
     p_color: RGBAColor = (color[0], color[1], color[2], int(255 * (alpha/100)))
     if pattern == "grid":
         spacing = 60 * scale
@@ -135,29 +130,15 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
             end_x = width // 2 + 3000 * math.cos(angle)
             end_y = height // 2 + 3000 * math.sin(angle)
             draw.line([(width//2, height//2), (end_x, end_y)], fill=p_color, width=3*scale)
-    elif pattern == "waves":
-        amplitude, wavelength = 20 * scale, 150 * scale
-        for y in range(0, height + 100, 40 * scale):
-            points = [(x, y + amplitude * math.sin((x / wavelength) * 2 * math.pi)) for x in range(0, width + 10, 10)]
-            draw.line(points, fill=p_color, width=2*scale)
-    elif pattern == "circuit":
-        for _ in range(30):
-            x, y = random.randint(0, width), random.randint(0, height)
-            length, d = random.randint(100, 400) * scale, random.choice([(1,0), (0,1), (1,1), (-1,1)])
-            draw.line([(x, y), (x + d[0]*length, y + d[1]*length)], fill=p_color, width=2*scale)
-            draw.ellipse([x-4*scale, y-4*scale, x+4*scale, y+4*scale], fill=p_color)
-    elif pattern == "stars":
-        for _ in range(200):
-            x, y = random.randint(0, width), random.randint(0, height)
-            s_size = random.randint(1, 3) * scale
-            draw.ellipse([x, y, x+s_size, y+s_size], fill=p_color)
-    elif pattern == "squiggles":
-        for _ in range(15):
-            x, y = random.randint(0, width), random.randint(0, height)
-            points = []
-            for i in range(5):
-                points.append((x + i*50*scale, y + random.randint(-20, 20)*scale))
-            draw.line(points, fill=p_color, width=4*scale, joint="curve")
+    elif pattern == "lasers":
+        # Retro Laser Grid Backdrop
+        # Vertical Perspective lines
+        for x in range(0, width, 150 * scale):
+            draw.line([(x, 0), (width//2, height)], fill=p_color, width=2*scale)
+        # Horizontal lines (Exponential spacing for depth)
+        for i in range(10):
+            y = int(height * (i/10)**2)
+            draw.line([(0, y), (width, y)], fill=p_color, width=2*scale)
 
 def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
                   primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
@@ -165,7 +146,6 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
                   alpha_pattern: int = 30, alpha_scanlines: int = 15, alpha_glow: int = 25, 
                   vignette: bool = False, border_width: int = 0, glow_mode: str = "center", 
                   glow_shape: str = "circle", shape_count: int = 2, no_scanlines: bool = False) -> str:
-    """Core banner rendering engine."""
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -201,11 +181,9 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
             (p_color[0], p_color[1], p_color[2], g_alpha),
             (s_color[0], s_color[1], s_color[2], int(g_alpha * 0.7))
         ]
-        
         for i in range(shape_count):
             cur_shape = random.choice(SHAPE_TYPES) if glow_shape == "mixed" else glow_shape
             cur_color = colors[i % 2]
-            
             if glow_mode == "center":
                 s_scale = 1.0 - (i * 0.2)
                 sz_w, sz_h = 600 * s_scale * scale, 400 * s_scale * scale
@@ -234,9 +212,9 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         tx = padding if align == "left" else (width - tw - padding if align == "right" else (width - tw) // 2)
         ty = (height - th) // 2
         
-        # Retro 90s uses black shadow instead of glitch if theme is 90s
-        if theme == "retro90s":
-            draw.text((tx+5*scale, ty+5*scale), name, font=font, fill=(0,0,0,150))
+        # Retro 90s uses black shadow instead of glitch
+        if theme in ["retro90s", "laser-school"]:
+            draw.text((tx+5*scale, ty+5*scale), name, font=font, fill=(0,0,0,200))
             draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
         else:
             offset = 3 * scale
@@ -249,20 +227,7 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         for y in range(0, height, 4 * scale):
             draw.line([(0, y), (width, y)], fill=(p_color[0], p_color[1], p_color[2], s_alpha), width=1*scale)
     
-    if border_width > 0:
-        b_px = border_width * scale
-        draw.rectangle([0, 0, width, height], outline=(p_color[0], p_color[1], p_color[2], 200), width=b_px)
-
     img.paste(layer, (0,0), layer)
-    footer_font_path = download_font("inter")
-    if footer_font_path:
-        small_font = ImageFont.truetype(footer_font_path, 22 * scale)
-        sub_text = "LOCALOPS AI // UTILITY ENGINE"
-        s_bbox = small_font.getbbox(sub_text)
-        s_tw = s_bbox[2] - s_bbox[0]
-        footer_y = height - 60 * scale
-        draw.text(((width - s_tw)//2, footer_y), sub_text, font=small_font, fill=(139, 148, 158, 200))
-
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
     img.save(output_path, quality=100)
     return output_path
@@ -273,7 +238,7 @@ def main() -> None:
     parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument("-f", "--font", default="orbitron", help="Font choice")
     parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme preset")
-    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "none"], help="Pattern")
+    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "lasers", "none"], help="Pattern")
     parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
     parser.add_argument("-b", "--bg", help="Background path")
     parser.add_argument("--primary", help="Primary hex")
@@ -285,35 +250,16 @@ def main() -> None:
     parser.add_argument("--glow-shape", default="circle", choices=["circle", "rect", "diamond", "triangle", "mixed"], help="Glow shape")
     parser.add_argument("--shape-count", type=int, default=2, help="Number of shapes")
     parser.add_argument("--no-scanlines", action="store_true", help="Remove retro lines")
-    parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
-    parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
-    parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
-    parser.add_argument("--no-text", action="store_true", help="Skip text")
     parser.add_argument("-r", "--random", action="store_true", help="Randomize styles")
-    
     args = parser.parse_args()
-    
     if args.random:
         args.theme = random.choice(list(THEMES.keys()))
-        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "none"])
+        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "lasers", "none"])
         args.font = random.choice(list(FONT_URLS.keys()))
-        args.align = random.choice(["left", "center", "right"])
         args.glow = random.choice(["center", "sides", "corners", "scatter", "none"])
-        args.glow_shape = random.choice(["circle", "rect", "diamond", "triangle", "mixed"])
-        args.shape_count = random.randint(2, 8)
-        args.no_scanlines = random.choice([True, False])
-        args.gradient = random.choice([True, False])
-        args.vignette = random.choice([True, False])
-        args.alpha_pattern = random.randint(10, 80)
-        args.alpha_scanlines = random.randint(5, 40)
-        args.alpha_glow = random.randint(10, 90)
-
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
     print(f"🎨 BrandPulse v{VERSION} // Theme: {args.theme}...")
-    create_banner(args.name, output_filename, args.bg, args.theme, 
-                  args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
-                  args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
-                  args.vignette, args.border, args.glow, args.glow_shape, args.shape_count, args.no_scanlines)
+    create_banner(args.name, output_filename, args.bg, args.theme, args.primary, args.secondary, args.pattern, args.align, args.font, False, args.gradient, 30, 15, 25, args.vignette, args.border, args.glow, args.glow_shape, args.shape_count, args.no_scanlines)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
