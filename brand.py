@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "2.9.0-beta"
+VERSION = "3.0.0-beta"
 
 # Type Aliases
 RGBColor = Tuple[int, int, int]
@@ -63,16 +63,6 @@ def download_font(font_name: str) -> Optional[str]:
                 if os.path.exists(f): return f
     return target_path
 
-def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
-    width, height = img.size
-    overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-    for i in range(120):
-        alpha = int(255 * intensity * (i / 120)**2)
-        inset = i * 2
-        draw.rectangle([inset, inset, width-inset, height-inset], outline=(0, 0, 0, alpha), width=3)
-    return Image.alpha_composite(img.convert('RGBA'), overlay).convert('RGB')
-
 def draw_yearbook_laser(draw: ImageDraw.ImageDraw, start: Tuple[float, float], end: Tuple[float, float], color: RGBColor, scale: int, thickness: int):
     """Draws a soft-focus yearbook style laser beam."""
     # 1. Very wide soft diffusion
@@ -85,7 +75,7 @@ def draw_yearbook_laser(draw: ImageDraw.ImageDraw, start: Tuple[float, float], e
 
 def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color1: RGBColor, color2: RGBColor, alpha: int, scale: int) -> None:
     if pattern == "yearbook":
-        # Perfectly aligned diagonal rays to form repeating diamond grid
+        # ALIGNED DIAGONAL RAYS ONLY
         origin_top = (width * 1.5, -height * 0.5)
         origin_bottom = (width * 1.5, height * 1.5)
         count = 12 
@@ -106,21 +96,13 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
             end = (start[0] + length * math.cos(angle), start[1] + length * math.sin(angle))
             draw_yearbook_laser(draw, start, end, color2, scale, 5)
 
-def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
-                  primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
-                  align: str = "center", font_choice: str = "orbitron", no_text: bool = False, gradient: bool = False,
-                  alpha_pattern: int = 40, alpha_scanlines: int = 15, alpha_glow: int = 25, 
-                  vignette: bool = False, border_width: int = 0, no_scanlines: bool = False) -> str:
+def create_banner(name: str, output_path: str = "banner.png", theme: str = "laser-school", pattern: str = "yearbook", font_choice: str = "concert") -> str:
     scale = 4
     width, height = 1280 * scale, 400 * scale
-    theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
-    theme_bg, theme_p, theme_s, theme_pattern = theme_data
-    
-    p_color = hex_to_rgb(primary) if primary else theme_p
-    s_color = hex_to_rgb(secondary) if secondary else theme_s
-    active_pattern = pattern if pattern else theme_pattern
+    theme_data = THEMES.get(theme.lower(), THEMES["laser-school"])
+    theme_bg, p_rgb, s_rgb, _ = theme_data
 
-    # Background Backdrop (Studio Blue)
+    # 1. Background Gradient (Pure backdrop)
     bg_top = (30, 70, 160)
     bg_bottom = (10, 15, 45)
     img = Image.new('RGB', (width, height), color=bg_bottom)
@@ -132,43 +114,27 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     mask.putdata(mask_data)
     img.paste(top_layer, (0, 0), mask)
     
-    # Draw Patterns onto temporary layer
+    # 2. Pattern Layer (Only Lasers)
     layer = Image.new('RGBA', (width, height), (0,0,0,0))
     draw = ImageDraw.Draw(layer)
-    if active_pattern != "none":
-        draw_pattern(draw, active_pattern, width, height, p_color, s_color, alpha_pattern, scale)
-    
-    # COMPOSITE PATTERN OVER BACKGROUND
+    draw_pattern(draw, pattern, width, height, p_rgb, s_rgb, 100, scale)
     img.paste(layer, (0,0), layer)
     
-    # ADD VIGNETTE
-    img = draw_vignette(img, 0.45)
+    # 3. TEXT ONLY (No Box, No Vignette)
+    font_path = download_font(font_choice)
+    font = ImageFont.truetype(font_path, (180 * scale if len(name) < 12 else 140 * scale)) if font_path else ImageFont.load_default()
     
-    if not no_text:
-        # Resolve Font
-        font_path = download_font(font_choice)
-        font = ImageFont.truetype(font_path, (180 * scale if len(name) < 12 else 140 * scale)) if font_path else ImageFont.load_default()
-        
-        # Calculate Text Position
-        bbox = font.getbbox(name)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        tx, ty = (width - tw) // 2, (height - th) // 2
-        
-        # CREATE A TEXT OVERLAY LAYER
-        text_layer = Image.new('RGBA', (width, height), (0,0,0,0))
-        text_draw = ImageDraw.Draw(text_layer)
-        
-        # DRAW ONLY THE SHADOW AND TEXT (ABSOLUTELY NO RECTANGLES/BOXES)
-        # 1. High-Fidelity 90s Block Shadow (Black)
-        shadow_offset = 12 * scale
-        text_draw.text((tx + shadow_offset, ty + shadow_offset), name, font=font, fill=(0, 0, 0, 255))
-        # 2. Main White Text
-        text_draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
-        
-        # FINAL MERGE
-        img.paste(text_layer, (0,0), text_layer)
+    bbox = font.getbbox(name)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx, ty = (width - tw) // 2, (height - th) // 2
+    
+    final_draw = ImageDraw.Draw(img)
+    # Hard 90s Block Shadow
+    shadow_offset = 12 * scale
+    final_draw.text((tx + shadow_offset, ty + shadow_offset), name, font=font, fill=(0, 0, 0, 255))
+    # Main White Text
+    final_draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
 
-    # RESIZE FOR OUTPUT
     img = img.resize((1280, 400), Image.Resampling.LANCZOS)
     img.save(output_path, quality=100)
     return output_path
@@ -177,14 +143,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("name")
     parser.add_argument("-o", "--output")
-    parser.add_argument("-f", "--font", default="concert")
-    parser.add_argument("-t", "--theme", default="laser-school")
-    parser.add_argument("-p", "--pattern", default="yearbook")
     args = parser.parse_args()
-    
     out = args.output if args.output else "banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Boxless Yearbook Rendering...")
-    create_banner(args.name, out, None, args.theme, None, None, args.pattern, "center", args.font)
+    print(f"🎨 BrandPulse v{VERSION} // Boxless Hard Reset...")
+    create_banner(args.name, out)
     print(f"✅ Success! {out}")
 
 if __name__ == "__main__":
