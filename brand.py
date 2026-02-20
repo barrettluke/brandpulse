@@ -9,7 +9,7 @@ import urllib.request
 import tempfile
 from typing import List, Tuple, Optional, Dict, Union, Any
 
-VERSION = "2.0.1-beta"
+VERSION = "2.1.0-beta"
 
 # Type Aliases
 RGBColor = Tuple[int, int, int]
@@ -25,7 +25,7 @@ THEMES: Dict[str, Tuple[RGBColor, RGBColor, RGBColor, str]] = {
     "ocean": ((5, 20, 40), (0, 191, 255), (30, 144, 255), "waves"),
     "mono": ((10, 10, 10), (240, 240, 240), (100, 100, 100), "dots"),
     "retro90s": ((255, 255, 255), (255, 0, 255), (0, 255, 255), "squiggles"),
-    "laser-school": ((20, 20, 60), (0, 255, 255), (255, 20, 147), "lasers") 
+    "laser-school": ((15, 15, 45), (0, 255, 255), (255, 20, 147), "yearbook") 
 }
 
 # Verified URLs
@@ -65,17 +65,6 @@ def download_font(font_name: str) -> Optional[str]:
                 if os.path.exists(f): return f
     return target_path
 
-def create_gradient(width: int, height: int, color1: RGBColor, color2: RGBColor) -> Image.Image:
-    base = Image.new('RGB', (width, height), color1)
-    top = Image.new('RGB', (width, height), color2)
-    mask = Image.new('L', (width, height))
-    mask_data = []
-    for y in range(height):
-        mask_data.extend([int(255 * (y / height))] * width)
-    mask.putdata(mask_data)
-    base.paste(top, (0, 0), mask)
-    return base
-
 def draw_vignette(img: Image.Image, intensity: float = 0.5) -> Image.Image:
     width, height = img.size
     overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
@@ -99,19 +88,24 @@ def draw_shape(draw: ImageDraw.ImageDraw, shape_type: str, coords: Coords, color
         x1, y1, x2, y2 = coords
         draw.polygon([(x1, y2), ((x1+x2)/2, y1), (x2, y2)], fill=color)
 
-def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color: RGBColor, alpha: int, scale: int) -> None:
-    p_color: RGBAColor = (color[0], color[1], color[2], int(255 * (alpha/100)))
+def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: int, color1: RGBColor, color2: RGBColor, alpha: int, scale: int) -> None:
+    """Renders procedural background patterns."""
+    p_color: RGBAColor = (color1[0], color1[1], color1[2], int(255 * (alpha/100)))
+    s_color: RGBAColor = (color2[0], color2[1], color2[2], int(255 * (alpha/100)))
+    
     if pattern == "grid":
         spacing = 60 * scale
         for x in range(0, width, spacing):
             draw.line([(x, 0), (x, height)], fill=p_color, width=1*scale)
         for y in range(0, height, spacing):
             draw.line([(0, y), (width, y)], fill=p_color, width=1*scale)
+            
     elif pattern == "dots":
         spacing = 40 * scale
         for x in range(0, width, spacing):
             for y in range(0, height, spacing):
                 draw.ellipse([x-2*scale, y-2*scale, x+2*scale, y+2*scale], fill=p_color)
+                
     elif pattern == "hex":
         size = 40 * scale
         h = size * math.sqrt(3)
@@ -124,19 +118,39 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
                     angle = math.radians(i * 60)
                     points.append((x + size * math.cos(angle), py + size * math.sin(angle)))
                 draw.polygon(points, outline=p_color, width=2*scale)
+                
     elif pattern == "rays":
         for i in range(0, 360, 15):
             angle = math.radians(i)
             end_x = width // 2 + 3000 * math.cos(angle)
             end_y = height // 2 + 3000 * math.sin(angle)
             draw.line([(width//2, height//2), (end_x, end_y)], fill=p_color, width=3*scale)
-    elif pattern == "lasers":
-        # Perspective Laser Grid
-        for x in range(0, width, 150 * scale):
-            draw.line([(x, 0), (width//2, height)], fill=p_color, width=2*scale)
-        for i in range(12):
-            y = int(height * (i/12)**1.8)
-            draw.line([(0, y), (width, y)], fill=p_color, width=2*scale)
+
+    elif pattern == "yearbook":
+        # CLASSIC 90S SCHOOL PHOTO BACKDROP
+        # Cyan Rays (Shooting from off-screen top-right towards bottom-left)
+        ray_count = random.randint(3, 8)
+        origin_x, origin_y = width + 200*scale, -200*scale
+        for _ in range(ray_count):
+            target_x = random.randint(-500*scale, width//2)
+            target_y = random.randint(height//2, height + 500*scale)
+            # Draw glow line
+            draw.line([(origin_x, origin_y), (target_x, target_y)], fill=p_color, width=10*scale)
+            draw.line([(origin_x, origin_y), (target_x, target_y)], fill=(255,255,255,100), width=2*scale)
+
+        # Magenta Parallel Lasers (Horizontal-ish)
+        laser_count = random.randint(3, 8)
+        spacing = random.randint(40, 80) * scale
+        start_y = random.randint(0, height // 2)
+        angle = math.radians(random.randint(10, 30))
+        for i in range(laser_count):
+            y_off = i * spacing
+            lx1, ly1 = -100*scale, start_y + y_off
+            lx2, ly2 = width + 100*scale, ly1 + (width * math.tan(angle))
+            # Draw glow line
+            draw.line([(lx1, ly1), (lx2, ly2)], fill=s_color, width=8*scale)
+            draw.line([(lx1, ly1), (lx2, ly2)], fill=(255,255,255,100), width=2*scale)
+
     elif pattern == "squiggles":
         for _ in range(20):
             x, y = random.randint(0, width), random.randint(0, height)
@@ -146,9 +160,10 @@ def draw_pattern(draw: ImageDraw.ImageDraw, pattern: str, width: int, height: in
 def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[str] = None, theme: str = "cyberpunk", 
                   primary: Optional[str] = None, secondary: Optional[str] = None, pattern: Optional[str] = None, 
                   align: str = "center", font_choice: str = "orbitron", no_text: bool = False, gradient: bool = False,
-                  alpha_pattern: int = 30, alpha_scanlines: int = 15, alpha_glow: int = 25, 
+                  alpha_pattern: int = 40, alpha_scanlines: int = 15, alpha_glow: int = 25, 
                   vignette: bool = False, border_width: int = 0, glow_mode: str = "center", 
                   glow_shape: str = "circle", shape_count: int = 2, no_scanlines: bool = False) -> str:
+    """Core banner rendering engine."""
     scale = 4
     width, height = 1280 * scale, 400 * scale
     theme_data = THEMES.get(theme.lower(), THEMES["cyberpunk"])
@@ -165,8 +180,8 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         overlay = Image.new('RGBA', (width, height), (0, 0, 0, overlay_alpha))
         img.paste(overlay, (0, 0), overlay)
     elif gradient:
-        img = create_gradient(width, height, theme_bg, p_color)
-        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 120))
+        img = create_gradient(width, height, theme_bg, (0, 0, 0)) # Gradient to black
+        overlay = Image.new('RGBA', (width, height), (theme_bg[0], theme_bg[1], theme_bg[2], 150))
         img.paste(overlay, (0, 0), overlay)
     else:
         img = Image.new('RGB', (width, height), color=theme_bg)
@@ -176,10 +191,10 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
     draw = ImageDraw.Draw(layer)
     
     if active_pattern != "none":
-        draw_pattern(draw, active_pattern, width, height, p_color, alpha_pattern, scale)
+        draw_pattern(draw, active_pattern, width, height, p_color, s_color, alpha_pattern, scale)
     
-    # 90s themes now default to NO GLOW unless explicitly asked
-    final_glow_mode = "none" if theme in ["retro90s", "laser-school"] and glow_mode == "center" else glow_mode
+    # Disable auto-glow for Yearbook theme
+    final_glow_mode = "none" if active_pattern == "yearbook" and glow_mode == "center" else glow_mode
 
     if final_glow_mode != "none":
         g_alpha = int(255 * (alpha_glow/100))
@@ -211,8 +226,7 @@ def create_banner(name: str, output_path: str = "banner.png", bg_path: Optional[
         ty = (height - th) // 2
         
         if theme in ["retro90s", "laser-school"]:
-            # Hard 90s offset shadow (No blur)
-            draw.text((tx+6*scale, ty+6*scale), name, font=font, fill=(0,0,0,255))
+            draw.text((tx+6*scale, ty+6*scale), name, font=font, fill=(0,0,0,220))
             draw.text((tx, ty), name, font=font, fill=(255, 255, 255, 255))
         else:
             offset = 3 * scale
@@ -236,23 +250,16 @@ def main() -> None:
     parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument("-f", "--font", default="orbitron", help="Font")
     parser.add_argument("-t", "--theme", default="cyberpunk", help="Theme")
-    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "lasers", "squiggles", "none"], help="Pattern")
-    parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
+    parser.add_argument("-p", "--pattern", help="Pattern")
+    parser.add_argument("-a", "--align", default="center", help="Align")
     parser.add_argument("-b", "--bg", help="Background path")
-    parser.add_argument("--primary", help="Primary hex")
-    parser.add_argument("--secondary", help="Secondary hex")
     parser.add_argument("--gradient", action="store_true", help="Enable gradient")
     parser.add_argument("--vignette", action="store_true", help="Enable vignette")
-    parser.add_argument("--border", type=int, default=0, help="Border width")
-    parser.add_argument("--glow", default="center", help="Glow style")
-    parser.add_argument("--glow-shape", default="circle", help="Glow shape")
-    parser.add_argument("--shape-count", type=int, default=2, help="Shape count")
     parser.add_argument("--no-scanlines", action="store_true", help="Remove lines")
-    parser.add_argument("-r", "--random", action="store_true", help="Randomize")
     args = parser.parse_args()
     output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Processing: {args.name}...")
-    create_banner(args.name, output_filename, args.bg, args.theme, args.primary, args.secondary, args.pattern, args.align, args.font, False, args.gradient, 30, 15, 25, args.vignette, args.border, args.glow, args.glow_shape, args.shape_count, args.no_scanlines)
+    print(f"🎨 BrandPulse v{VERSION} // HD Yearbook Engine...")
+    create_banner(args.name, output_filename, args.bg, args.theme, None, None, args.pattern, args.align, args.font, False, args.gradient, 40, 15, 25, args.vignette, 0, "center", "circle", 2, args.no_scanlines)
     print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
