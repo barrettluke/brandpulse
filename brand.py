@@ -140,14 +140,47 @@ def create_banner(name: str, output_path: str = "banner.png", theme: str = "lase
     return output_path
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("name")
-    parser.add_argument("-o", "--output")
+    parser = argparse.ArgumentParser(description=f"BrandPulse v{VERSION}")
+    parser.add_argument("name", help="Project name")
+    parser.add_argument("-o", "--output", help="Output file")
+    parser.add_argument("-f", "--font", default="orbitron", help="Font choice")
+    parser.add_argument("-t", "--theme", default="cyberpunk", choices=THEMES.keys(), help="Theme preset")
+    parser.add_argument("-p", "--pattern", choices=["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "yearbook", "none"], default="grid", help="Pattern")
+    parser.add_argument("-a", "--align", default="center", choices=["left", "center", "right"], help="Align")
+    parser.add_argument("-b", "--bg", help="Background path")
+    parser.add_argument("--primary", help="Primary hex")
+    parser.add_argument("--secondary", help="Secondary hex")
+    parser.add_argument("--gradient", action="store_true", help="Enable gradient")
+    parser.add_argument("--vignette", action="store_true", help="Enable vignette")
+    parser.add_argument("--border", type=int, default=0, help="Border width")
+    parser.add_argument("--alpha-pattern", type=int, default=30, help="Pattern opacity")
+    parser.add_argument("--alpha-scanlines", type=int, default=15, help="Scanline opacity")
+    parser.add_argument("--alpha-glow", type=int, default=25, help="Glow opacity")
+    parser.add_argument("--no-text", action="store_true", help="Skip text")
+    parser.add_argument("--no-scanlines", action="store_true", help="Remove retro lines")
+    parser.add_argument("-r", "--random", action="store_true", help="Randomize styles")
+    
     args = parser.parse_args()
-    out = args.output if args.output else "banner.png"
-    print(f"🎨 BrandPulse v{VERSION} // Boxless Hard Reset...")
-    create_banner(args.name, out)
-    print(f"✅ Success! {out}")
+    
+    if args.random:
+        print("🎲 Randomizing styles...")
+        args.theme = random.choice(list(THEMES.keys()))
+        args.pattern = random.choice(["grid", "dots", "hex", "rays", "waves", "circuit", "stars", "squiggles", "yearbook", "none"])
+        args.font = random.choice(list(FONT_URLS.keys()))
+        args.align = random.choice(["left", "center", "right"])
+        args.no_scanlines = random.choice([True, False])
+        args.gradient = random.choice([True, False])
+        args.vignette = random.choice([True, False])
+        args.alpha_pattern = random.randint(20, 60)
+        args.alpha_scanlines = random.randint(5, 30)
+
+    output_filename = args.output if args.output else f"{args.name.lower().replace(' ', '_')}_banner.png"
+    print(f"🎨 BrandPulse v{VERSION} // Processing...")
+    create_banner(args.name, output_filename, args.bg, args.theme, 
+                  args.primary, args.secondary, args.pattern, args.align, args.font, args.no_text,
+                  args.gradient, args.alpha_pattern, args.alpha_scanlines, args.alpha_glow,
+                  args.vignette, args.border, args.no_scanlines)
+    print(f"✅ Success! Banner saved to: {output_filename}")
 
 if __name__ == "__main__":
     main()
